@@ -11,6 +11,7 @@
 ##
 #   2016-10-26  init    eric.larmouth@thomsonreuters.com
 ##  2019-04-10  { Added autofs files handling logic} Bhargav bhargavkumar.nadipalli@thomsonreuters.com
+##  2025-03-02  {Added logic to make compatible for solaris servers} haritha.vittamsetti@thomsonreuters.com
 ########
 
 ##  Three needed components:
@@ -20,36 +21,62 @@
 
 ##  fstab filesystem handling
 
-grep -v '^#' /etc/fstab 2>/dev/null | awk -v MYHN=$(hostname) '(($3=="cifs")||($3=="nfs")){print $1","$2","$3","MYHN",configured-fstab"}' 2>/dev/null | sort | uniq
-
-##  mounted filesystem handling
 OS=$(uname -s)
 if [[ "$OS" == "Linux" ]]; then
-        mount 2>/dev/null | awk -v MYHN=$(hostname) '(($5=="cifs")||($5=="nfs")){print $1","$3","$5","MYHN",mounted"}' 2>/dev/null | sort | uniq
+    grep -v '^#' /etc/fstab 2>/dev/null | awk -v MYHN=$(hostname) '(($3=="cifs")||($3=="nfs")){print $1","$2","$3","MYHN",configured-fstab"}' | sort | uniq
+elif [[ "$OS" == "SunOS" ]]; then
+    grep -v '^#' /etc/vfstab 2>/dev/null | nawk -v MYHN=$(hostname) '(($3=="cifs")||($3=="nfs")){print $1","$2","$3","MYHN",configured-fstab"}' | sort | uniq
 elif [[ "$OS" == "AIX" ]]; then
-    	mount | grep 'nfs' | awk -v MYHN=$(hostname) '{print $1":"$2","$3","$4","MYHN",mounted"}' | sort | uniq
+    grep -v '^#' /etc/fstab 2>/dev/null | awk -v MYHN=$(hostname) '(($3=="cifs")||($3=="nfs")){print $1","$2","$3","MYHN",configured-fstab"}' | sort | uniq
 fi
 
-##  autofs handling
-
-while read AMDIR AMFIL T; do
-    grep -v '^#' "${AMFIL}" 2>/dev/null | awk -v MYHN=$(hostname) -v AMDIR=${AMDIR} '{print $NF","AMDIR"/"$1",nfs,"MYHN",configured-autofs"}' 2>/dev/null | sort | uniq
-done <<<"`grep ^/ /etc/auto.master`"
-
-## AIX  autofs handling
-
-if [ -f "/etc/auto_master" ];
-then
-while read AMDIR AMFIL T; do
-    grep -v '^#' "${AMFIL}" 2>/dev/null | awk -v MYHN=$(hostname) -v AMDIR=${AMDIR} '{print $NF","AMDIR"/"$1",nfs,"MYHN",configured-autofs"}' 2>/dev/null | sort | uniq
-done <<<"`grep ^/ /etc/auto_master`"
+## mounted filesystem handling
+if [[ "$OS" == "Linux" ]]; then
+    mount 2>/dev/null | awk -v MYHN=$(hostname) '(($5=="cifs")||($5=="nfs")){print $1","$3","$5","MYHN",mounted"}' | sort | uniq
+elif [[ "$OS" == "AIX" ]]; then
+    mount | grep 'nfs' | awk -v MYHN=$(hostname) '{print $1":"$2","$3","$4","MYHN",mounted"}' | sort | uniq
+elif [[ "$OS" == "SunOS" ]]; then
+    cat /etc/mnttab | grep -i nfs | nawk -v MYHN=$(hostname) '{print $1":"$2","$3","$4","MYHN",mounted"}' | sort | uniq
 fi
 
-## ##  additional autofs files handling
+## autofs handling for Linux
+if [[ "$OS" == "Linux" ]]; then
+    if [[ -f "/etc/auto.master" ]]; then
+        while read AMDIR AMFIL T; do
+            grep -v '^#' "${AMFIL}" 2>/dev/null | awk -v MYHN=$(hostname) -v AMDIR=${AMDIR} '{print $NF","AMDIR"/"$1",nfs,"MYHN",configured-autofs"}' 2>/dev/null | sort | uniq
+        done < <(grep ^/ /etc/auto.master)
+    fi
+fi
+
+## autofs handling for Solaris
+if [[ "$OS" == "SunOS" ]]; then
+    if [[ -f "/etc/auto_master" ]]; then
+        grep ^/ /etc/auto_master | while read AMDIR AMFIL T; do
+            if [ -n "$AMFIL" ] && [ -f "$AMFIL" ]; then
+                grep -v '^#' "$AMFIL" 2>/dev/null | nawk -v MYHN=$(hostname) -v AMDIR="$AMDIR" '{print $NF","AMDIR"/"$1",nfs,"MYHN",configured-autofs"}' | sort | uniq
+            fi
+        done
+    else
+        echo "/etc/auto_master does not exist."
+    fi
+fi
+
+## AIX autofs handling
+if [[ "$OS" == "AIX" ]]; then
+    if [ -f "/etc/auto_master" ]; then
+        grep ^/ /etc/auto_master | while read AMDIR AMFIL T; do
+            if [ -n "$AMFIL" ] && [ -f "$AMFIL" ]; then
+                grep -v '^#' "${AMFIL}" 2>/dev/null | awk -v MYHN=$(hostname) -v AMDIR=${AMDIR} '{print $NF","AMDIR"/"$1",nfs,"MYHN",configured-autofs"}' | sort | uniq
+            fi
+        done
+    fi
+fi
 
 FILE="/etc/autox.tools"
-if [ -f "$FILE" ];
-then
-   a=$(cat $FILE | grep -i MYAUTOFSFILES | awk -F\" '{print $2}')
-   cat $a | awk -v myhn=$(hostname) -v butools="$a" '{print $3",/tools/"$1",nfs,"myhn","butools",configured-BUautofs"}'
+
+if [[ "$OS" == "Linux"  && "$OS" != "SunOS" ]]; then
+   if [ -f "$FILE" ]; then
+        a=$(cat $FILE | grep -i MYAUTOFSFILES | awk -F\" '{print $2}')
+        cat $a | awk -v myhn=$(hostname) -v butools="$a" '{print $3",/tools/"$1",nfs,"myhn","butools",configured-BUautofs"}'
+    fi
 fi
