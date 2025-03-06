@@ -1,15 +1,29 @@
 #!/usr/bin/python
 
+###################################################################################
+##
+#   Script Name: storage_scp.py
+#   Description:This script performs an audit of storage shares on designated servers. 
+#   It systematically collects information about each storage share event details.The collected data is then saved into a specified file for further analysis and record-keeping.
+#
+#   Author - Haritha Vittamsetti
+##################################################################################
+
+
 import subprocess
 import requests
 import logging
 from datetime import datetime
 
 current_date = datetime.now().strftime("%m%d%Y")
-logging.basicConfig(filename= f'audit_log_{current_date}.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log_directory = '/infra_unixsvcs/unix-support/log'
+log_filename = f'{log_directory}/audit_log_{current_date}.log'
+logging.basicConfig(filename=log_filename, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
 
-file_name = 'audit_' + current_date
+audit_directory = '/infra_unixsvcs/unix-support/bin/storage_audit/'
+file_name = f'{audit_directory}/audit_{current_date}'
+#audit_file_path = audit_directory + file_name
 
 url = "http://gotmon.int.thomsonreuters.com/api/config_admin_group/unix-support-tr"
  
@@ -24,7 +38,7 @@ total_servers_str = ' '.join(total_servers)
 
 def run_command():
     
-        cmd_1 = f"echo '{total_servers_str}' | /usr/bin/python2 /infra_tools/bin/dbash -u root -c 'uptime' --fail -o hosts"
+        cmd_1 = f"echo '{total_servers_str}' | /usr/bin/python2 /infra_tools/bin/dbash -u root -c 'uptime' --fail -o /infra_unixsvcs/unix-support/bin/storage_audit/hosts"
         first_task = subprocess.Popen(cmd_1, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, shell=True)
         stdout, stderr = first_task.communicate()
 
@@ -32,7 +46,7 @@ def run_command():
             logger.info(stdout)
             logger.info(f"Return code: {first_task.returncode}")
 
-            cmd_2 = 'cat /tools/infra/temp60days/TR/UNIX_HOSTS/hosts.successhostlist | /usr/bin/python2 /infra_tools/bin/dbash -u root -f /infra_unixsvcs/unix-support/bin/storageaudit_master.sh | awk "{print $NF}"'
+            cmd_2 = 'cat /infra_unixsvcs/unix-support/bin/storage_audit/hosts.successhostlist | /usr/bin/python2 /infra_tools/bin/dbash -u root -f /infra_unixsvcs/unix-support/bin/storageaudit_master.sh | awk "{print $NF}"'
             second_task = subprocess.Popen(cmd_2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, shell=True)
         
             stdout, stderr = second_task.communicate()
@@ -69,6 +83,7 @@ def main():
             recipient = "STORAGE-SUPPORT-TR@thomsonreuters.com,kelsey.halverson@thomsonreuters.com"
             #recipient = "haritha.vittamsetti@thomsonreuters.com"
             cc_emails = "UNIX-SUPPORT-TR@thomsonreuters.com"
+            #cc_emails = "haritha.vittamsetti@thomsonreuters.com"
             send_email(subject, body, "UNIX-SUPPORT-TR@thomsonreuters.com", recipient, cc_emails)
             
         else:
