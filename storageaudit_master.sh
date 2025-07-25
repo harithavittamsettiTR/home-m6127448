@@ -1,7 +1,7 @@
 #!/bin/bash
 ########
 ##
-#   storageaudit.sh
+#   storageaudit_master.sh
 #
 #   should be as multiplatform as possible, or at least include hooks for it.
 #   But keeping it simple.
@@ -20,10 +20,10 @@ OS=$(uname -s)
 if [[ "$OS" == "Linux" ]]; then
     grep -v '^#' /etc/fstab 2>/dev/null | awk -v MYHN=$(hostname) '(($3=="cifs")||($3=="nfs")){print $1","$2","$3","MYHN",configured-fstab"}' | sort | uniq
 elif [[ "$OS" == "SunOS" ]]; then
-    if [[ -x "/infra_unixsvcs/unix-support/temp60days/TR/durga/Solaris_nfs_audit.sh" ]]; then
-        /infra_unixsvcs/unix-support/temp60days/TR/durga/Solaris_nfs_audit.sh
+    if [[ -x "/infra_unixsvcs/unix-support/bin/solaris_nfs_audit.sh" ]]; then
+        /infra_unixsvcs/unix-support/bin/solaris_nfs_audit.sh
     else
-        echo "Warning: /infra_unixsvcs/unix-support/temp60days/TR/durga/Solaris_nfs_audit.sh not found or not executable." >&2
+        echo "Warning: /infra_unixsvcs/unix-support/bin/solaris_nfs_audit.sh not found or not executable." >&2
     fi
     # Also process vfstab for SunOS
     grep -v '^#' /etc/vfstab 2>/dev/null | nawk -v MYHN=$(hostname) '(($3=="cifs")||($3=="nfs")){print $1","$2","$3","MYHN",configured-fstab"}' | sort | uniq
